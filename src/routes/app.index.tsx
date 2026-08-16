@@ -238,7 +238,7 @@ function Dashboard() {
 
         const weatherResponse =
           await fetch(
-            `http://127.0.0.1:8000/weather?latitude=${encodeURIComponent(
+            `https://ai-farm-backend-v57r.onrender.com/weather?latitude=${encodeURIComponent(
               latitude,
             )}&longitude=${encodeURIComponent(
               longitude,

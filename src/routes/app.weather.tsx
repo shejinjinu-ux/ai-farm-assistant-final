@@ -35,7 +35,7 @@ export const Route = createFileRoute("/app/weather")({
 });
 
 const API_BASE =
-  import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+  import.meta.env.VITE_API_BASE_URL || "https://ai-farm-backend-v57r.onrender.com";
 
 type CurrentWeather = {
   temperature: number;
