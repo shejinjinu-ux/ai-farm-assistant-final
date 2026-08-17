@@ -14,6 +14,7 @@ import { Route as AppRouteImport } from './routes/app'
 import { Route as IrrigationRouteImport } from './routes/irrigation'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as SetupRouteImport } from './routes/setup'
+import { Route as SignupRouteImport } from './routes/signup'
 import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppAssistantRouteImport } from './routes/app.assistant'
 import { Route as AppCalendarRouteImport } from './routes/app.calendar'
@@ -55,6 +56,11 @@ const LoginRoute = LoginRouteImport.update({
 const SetupRoute = SetupRouteImport.update({
   id: '/setup',
   path: '/setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignupRoute = SignupRouteImport.update({
+  id: '/signup',
+  path: '/signup',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppIndexRoute = AppIndexRouteImport.update({
@@ -149,6 +155,7 @@ export interface FileRoutesByFullPath {
   '/irrigation': typeof IrrigationRoute
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
+  '/signup': typeof SignupRoute
   '/app/assistant': typeof AppAssistantRoute
   '/app/calendar': typeof AppCalendarRoute
   '/app/disease': typeof AppDiseaseRoute
@@ -172,6 +179,7 @@ export interface FileRoutesByTo {
   '/irrigation': typeof IrrigationRoute
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
+  '/signup': typeof SignupRoute
   '/app/assistant': typeof AppAssistantRoute
   '/app/calendar': typeof AppCalendarRoute
   '/app/disease': typeof AppDiseaseRoute
@@ -197,6 +205,7 @@ export interface FileRoutesById {
   '/irrigation': typeof IrrigationRoute
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
+  '/signup': typeof SignupRoute
   '/app/assistant': typeof AppAssistantRoute
   '/app/calendar': typeof AppCalendarRoute
   '/app/disease': typeof AppDiseaseRoute
@@ -223,6 +232,7 @@ export interface FileRouteTypes {
     | '/irrigation'
     | '/login'
     | '/setup'
+    | '/signup'
     | '/app/assistant'
     | '/app/calendar'
     | '/app/disease'
@@ -246,6 +256,7 @@ export interface FileRouteTypes {
     | '/irrigation'
     | '/login'
     | '/setup'
+    | '/signup'
     | '/app/assistant'
     | '/app/calendar'
     | '/app/disease'
@@ -270,6 +281,7 @@ export interface FileRouteTypes {
     | '/irrigation'
     | '/login'
     | '/setup'
+    | '/signup'
     | '/app/assistant'
     | '/app/calendar'
     | '/app/disease'
@@ -295,6 +307,7 @@ export interface RootRouteChildren {
   IrrigationRoute: typeof IrrigationRoute
   LoginRoute: typeof LoginRoute
   SetupRoute: typeof SetupRoute
+  SignupRoute: typeof SignupRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -332,6 +345,13 @@ declare module '@tanstack/react-router' {
       path: '/setup'
       fullPath: '/setup'
       preLoaderRoute: typeof SetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/signup': {
+      id: '/signup'
+      path: '/signup'
+      fullPath: '/signup'
+      preLoaderRoute: typeof SignupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/app/': {
@@ -504,6 +524,7 @@ const rootRouteChildren: RootRouteChildren = {
   IrrigationRoute: IrrigationRoute,
   LoginRoute: LoginRoute,
   SetupRoute: SetupRoute,
+  SignupRoute: SignupRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

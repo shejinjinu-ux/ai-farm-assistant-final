@@ -4,7 +4,11 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import {
   MapPin,
@@ -18,7 +22,6 @@ import {
   Trash2,
   User,
   Phone,
-  Save,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -46,9 +49,7 @@ import { useFarm } from "@/lib/farm-context";
 import {
   AREA_UNITS,
   CROPS,
-  DISTRICTS,
   SOILS,
-  STATES,
 } from "@/lib/mock-data";
 
 import { cn } from "@/lib/utils";
@@ -94,6 +95,14 @@ export const Route = createFileRoute("/setup")({
 
 
 /* =========================================================
+   BACKEND
+========================================================= */
+
+const BACKEND_URL =
+  "http://127.0.0.1:8000";
+
+
+/* =========================================================
    STEPS
 ========================================================= */
 
@@ -103,6 +112,28 @@ const STEPS = [
   "Crop",
   "Soil",
 ];
+
+
+/* =========================================================
+   LOCATION TYPES
+========================================================= */
+
+interface LocationState {
+  name: string;
+  code: string;
+}
+
+interface LocationDistrict {
+  name: string;
+  code: string;
+}
+
+interface LocationVillage {
+  name: string;
+  code: string;
+  subdistrict: string;
+  subdistrict_code: string;
+}
 
 
 /* =========================================================
@@ -142,14 +173,26 @@ interface FarmRow {
 ========================================================= */
 
 function SetupPage() {
+
   const {
     updateFarm,
   } = useFarm();
 
-  const navigate = useNavigate();
+  const navigate =
+    useNavigate();
+
+
+  /* =======================================================
+     FARM LIST
+  ======================================================= */
 
   const [farms, setFarms] =
     useState<FarmRow[]>([]);
+
+
+  /* =======================================================
+     FORM
+  ======================================================= */
 
   const [form, setForm] =
     useState({
@@ -162,21 +205,52 @@ function SetupPage() {
       village: "",
 
       cropId:
-        CROPS[0]?.id ?? "rice",
+        CROPS[0]?.id ??
+        "rice",
 
       soilId:
-        SOILS[0]?.id ?? "loamy",
+        SOILS[0]?.id ??
+        "loamy",
 
       area: "1",
 
       unit:
-        AREA_UNITS[0]?.id ?? "acre",
+        AREA_UNITS[0]?.id ??
+        "acre",
 
       latitude: "",
       longitude: "",
 
       language: "en",
     });
+
+
+  /* =======================================================
+     LOCATION DATA
+  ======================================================= */
+
+  const [locationStates, setLocationStates] =
+    useState<LocationState[]>([]);
+
+  const [locationDistricts, setLocationDistricts] =
+    useState<LocationDistrict[]>([]);
+
+  const [locationVillages, setLocationVillages] =
+    useState<LocationVillage[]>([]);
+
+  const [loadingStates, setLoadingStates] =
+    useState(false);
+
+  const [loadingDistricts, setLoadingDistricts] =
+    useState(false);
+
+  const [loadingVillages, setLoadingVillages] =
+    useState(false);
+
+
+  /* =======================================================
+     OTHER STATES
+  ======================================================= */
 
   const [selectedFarmId, setSelectedFarmId] =
     useState<string | null>(null);
@@ -201,14 +275,182 @@ function SetupPage() {
 
 
   /* =======================================================
-     LOAD FARMS
+     LOAD STATES
+  ======================================================= */
+
+  async function loadStates() {
+
+    try {
+
+      setLoadingStates(true);
+
+      const response =
+        await fetch(
+          `${BACKEND_URL}/locations/states`,
+        );
+
+      if (!response.ok) {
+        throw new Error(
+          "Failed to load states",
+        );
+      }
+
+      const data =
+        await response.json();
+
+      setLocationStates(
+        data.states ?? [],
+      );
+
+    } catch (err) {
+
+      console.error(
+        "State loading error:",
+        err,
+      );
+
+      setError(
+        "Unable to load India states.",
+      );
+
+    } finally {
+
+      setLoadingStates(false);
+
+    }
+  }
+
+
+  /* =======================================================
+     LOAD DISTRICTS
+  ======================================================= */
+
+  async function loadDistricts(
+    state: string,
+  ) {
+
+    if (!state) {
+
+      setLocationDistricts([]);
+
+      return;
+    }
+
+    try {
+
+      setLoadingDistricts(true);
+
+      const response =
+        await fetch(
+          `${BACKEND_URL}/locations/districts?state=${encodeURIComponent(
+            state,
+          )}`,
+        );
+
+      if (!response.ok) {
+        throw new Error(
+          "Failed to load districts",
+        );
+      }
+
+      const data =
+        await response.json();
+
+      setLocationDistricts(
+        data.districts ?? [],
+      );
+
+    } catch (err) {
+
+      console.error(
+        "District loading error:",
+        err,
+      );
+
+      setError(
+        "Unable to load districts.",
+      );
+
+    } finally {
+
+      setLoadingDistricts(false);
+
+    }
+  }
+
+
+  /* =======================================================
+     LOAD VILLAGES
+  ======================================================= */
+
+  async function loadVillages(
+    state: string,
+    district: string,
+  ) {
+
+    if (!state || !district) {
+
+      setLocationVillages([]);
+
+      return;
+    }
+
+    try {
+
+      setLoadingVillages(true);
+
+      const response =
+        await fetch(
+          `${BACKEND_URL}/locations/villages?state=${encodeURIComponent(
+            state,
+          )}&district=${encodeURIComponent(
+            district,
+          )}`,
+        );
+
+      if (!response.ok) {
+        throw new Error(
+          "Failed to load villages",
+        );
+      }
+
+      const data =
+        await response.json();
+
+      setLocationVillages(
+        data.villages ?? [],
+      );
+
+    } catch (err) {
+
+      console.error(
+        "Village loading error:",
+        err,
+      );
+
+      setError(
+        "Unable to load villages.",
+      );
+
+    } finally {
+
+      setLoadingVillages(false);
+
+    }
+  }
+
+
+  /* =======================================================
+     LOAD FARM LIST
   ======================================================= */
 
   async function loadFarms() {
+
     setLoading(true);
     setError("");
 
     try {
+
       const {
         data: {
           user,
@@ -217,6 +459,7 @@ function SetupPage() {
         await supabase.auth.getUser();
 
       if (!user) {
+
         setError(
           "Please login first.",
         );
@@ -243,6 +486,7 @@ function SetupPage() {
           );
 
       if (error) {
+
         console.error(
           "Farm loading error:",
           error,
@@ -260,19 +504,30 @@ function SetupPage() {
       );
 
     } catch (err) {
+
       console.error(err);
 
       setError(
         "Unable to load farms.",
       );
+
     } finally {
+
       setLoading(false);
+
     }
   }
 
 
+  /* =======================================================
+     INITIAL LOAD
+  ======================================================= */
+
   useEffect(() => {
+
     loadFarms();
+    loadStates();
+
   }, []);
 
 
@@ -284,12 +539,188 @@ function SetupPage() {
     field: keyof typeof form,
     value: string,
   ) {
+
     setForm(
       (current) => ({
         ...current,
         [field]: value,
       }),
     );
+
+  }
+
+
+  /* =======================================================
+     STATE CHANGE
+  ======================================================= */
+
+  async function handleStateChange(
+    value: string,
+  ) {
+
+    updateField(
+      "state",
+      value,
+    );
+
+    updateField(
+      "district",
+      "",
+    );
+
+    updateField(
+      "village",
+      "",
+    );
+
+    updateField(
+      "latitude",
+      "",
+    );
+
+    updateField(
+      "longitude",
+      "",
+    );
+
+    setLocationDistricts([]);
+    setLocationVillages([]);
+
+    await loadDistricts(value);
+
+  }
+
+
+  /* =======================================================
+     DISTRICT CHANGE
+  ======================================================= */
+
+  async function handleDistrictChange(
+    value: string,
+  ) {
+
+    updateField(
+      "district",
+      value,
+    );
+
+    updateField(
+      "village",
+      "",
+    );
+
+    updateField(
+      "latitude",
+      "",
+    );
+
+    updateField(
+      "longitude",
+      "",
+    );
+
+    setLocationVillages([]);
+
+    await loadVillages(
+      form.state,
+      value,
+    );
+
+  }
+
+
+  /* =======================================================
+     VILLAGE CHANGE
+  ======================================================= */
+
+  async function handleVillageChange(
+    value: string,
+  ) {
+
+    updateField(
+      "village",
+      value,
+    );
+
+    updateField(
+      "latitude",
+      "",
+    );
+
+    updateField(
+      "longitude",
+      "",
+    );
+
+    try {
+
+      setMessage(
+        "Finding village coordinates...",
+      );
+
+      const response =
+        await fetch(
+          `${BACKEND_URL}/locations/village-location?village=${encodeURIComponent(
+            value,
+          )}&district=${encodeURIComponent(
+            form.district,
+          )}&state=${encodeURIComponent(
+            form.state,
+          )}`,
+        );
+
+      if (!response.ok) {
+        throw new Error(
+          "Coordinate API failed",
+        );
+      }
+
+      const data =
+        await response.json();
+
+      if (!data.success) {
+
+        setError(
+          "Coordinates not found for this village.",
+        );
+
+        setMessage("");
+
+        return;
+      }
+
+      updateField(
+        "latitude",
+        String(data.latitude),
+      );
+
+      updateField(
+        "longitude",
+        String(data.longitude),
+      );
+
+      setMessage(
+        `📍 ${value} coordinates found successfully.`,
+      );
+
+      toast.success(
+        "Village location found 📍",
+      );
+
+    } catch (err) {
+
+      console.error(
+        "Village coordinate error:",
+        err,
+      );
+
+      setMessage("");
+
+      setError(
+        "Unable to get village latitude and longitude.",
+      );
+
+    }
   }
 
 
@@ -298,6 +729,7 @@ function SetupPage() {
   ======================================================= */
 
   function handleNewFarm() {
+
     if (saving) {
       return;
     }
@@ -333,6 +765,9 @@ function SetupPage() {
       language: "en",
     });
 
+    setLocationDistricts([]);
+    setLocationVillages([]);
+
     setStep(0);
 
     setError("");
@@ -353,9 +788,10 @@ function SetupPage() {
      EDIT FARM
   ======================================================= */
 
-  function handleEditFarm(
+  async function handleEditFarm(
     farm: FarmRow,
   ) {
+
     setSelectedFarmId(
       farm.id,
     );
@@ -396,12 +832,10 @@ function SetupPage() {
         "loamy",
 
       area:
-        farm.area !== null &&
-        farm.area !== undefined
-          ? String(
-              farm.area,
-            )
-          : "1",
+        String(
+          farm.area ??
+            1,
+        ),
 
       unit:
         farm.area_unit ??
@@ -409,16 +843,14 @@ function SetupPage() {
         "acre",
 
       latitude:
-        farm.latitude !== null &&
-        farm.latitude !== undefined
+        farm.latitude != null
           ? String(
               farm.latitude,
             )
           : "",
 
       longitude:
-        farm.longitude !== null &&
-        farm.longitude !== undefined
+        farm.longitude != null
           ? String(
               farm.longitude,
             )
@@ -432,10 +864,23 @@ function SetupPage() {
     setStep(0);
 
     setError("");
+    setMessage("");
 
-    setMessage(
-      "Editing selected farm.",
-    );
+    if (farm.state) {
+
+      await loadDistricts(
+        farm.state,
+      );
+
+      if (farm.district) {
+
+        await loadVillages(
+          farm.state,
+          farm.district,
+        );
+
+      }
+    }
 
     window.scrollTo({
       top: 0,
@@ -445,29 +890,30 @@ function SetupPage() {
 
 
   /* =======================================================
-     GPS + REVERSE GEOCODING
+     CURRENT GPS LOCATION
   ======================================================= */
 
-  async function handleCurrentLocation() {
-    setError("");
-    setMessage("");
+  function handleCurrentLocation() {
 
     if (!navigator.geolocation) {
-      toast.error(
-        "Location is not supported by this browser.",
+
+      setError(
+        "Geolocation is not supported by this browser.",
       );
 
       return;
     }
 
     setGettingLocation(true);
-
-    toast(
-      "📍 Getting your current location...",
+    setError("");
+    setMessage(
+      "Detecting your current location...",
     );
 
     navigator.geolocation.getCurrentPosition(
+
       async (position) => {
+
         const latitude =
           position.coords.latitude;
 
@@ -480,14 +926,17 @@ function SetupPage() {
         const longitudeText =
           longitude.toFixed(7);
 
+        updateField(
+          "latitude",
+          latitudeText,
+        );
+
+        updateField(
+          "longitude",
+          longitudeText,
+        );
+
         try {
-          /*
-           * -------------------------------------------------
-           * REVERSE GEOCODING
-           *
-           * Coordinates -> State / District / Village
-           * -------------------------------------------------
-           */
 
           const response =
             await fetch(
@@ -506,100 +955,22 @@ function SetupPage() {
           const address =
             data.address ?? {};
 
-
-          /* -------------------------------------------------
-             DETECT STATE
-          ------------------------------------------------- */
-
           const detectedState =
             address.state ??
             "";
 
-
-          /*
-           * Try to match detected state
-           * with our existing STATES list.
-           */
-
-          const matchedState =
-            STATES.find(
-              (state) =>
-                state.toLowerCase() ===
-                detectedState
-                  .toLowerCase(),
-            ) ??
-            STATES.find(
-              (state) =>
-                state
-                  .toLowerCase()
-                  .includes(
-                    detectedState.toLowerCase(),
-                  ) ||
-                detectedState
-                  .toLowerCase()
-                  .includes(
-                    state.toLowerCase(),
-                  ),
-            ) ??
-            detectedState;
-
-
-          /* -------------------------------------------------
-             DETECT DISTRICT
-          ------------------------------------------------- */
-
-          let detectedDistrict =
-            address.state_district ??
-            address.district ??
-            address.county ??
-            "";
-
-
-          detectedDistrict =
-            detectedDistrict
+          const detectedDistrict =
+            (
+              address.state_district ??
+              address.district ??
+              address.county ??
+              ""
+            )
               .replace(
                 /\s+district$/i,
                 "",
               )
               .trim();
-
-
-          /*
-           * Match district against our
-           * existing district list.
-           */
-
-          const availableDistricts =
-            DISTRICTS[
-              matchedState
-            ] ?? [];
-
-
-          const matchedDistrict =
-            availableDistricts.find(
-              (district) =>
-                district.toLowerCase() ===
-                detectedDistrict.toLowerCase(),
-            ) ??
-            availableDistricts.find(
-              (district) =>
-                district
-                  .toLowerCase()
-                  .includes(
-                    detectedDistrict.toLowerCase(),
-                  ) ||
-                detectedDistrict
-                  .toLowerCase()
-                  .includes(
-                    district.toLowerCase(),
-                  ),
-            ) ??
-            detectedDistrict;
-
-
-          /* -------------------------------------------------
-             DETECT VILLAGE / CITY
-          ------------------------------------------------- */
 
           const detectedVillage =
             address.village ??
@@ -609,10 +980,22 @@ function SetupPage() {
             address.suburb ??
             "";
 
+          let matchedState =
+            detectedState;
 
-          /* -------------------------------------------------
-             UPDATE FORM
-          ------------------------------------------------- */
+          const stateMatch =
+            locationStates.find(
+              (state) =>
+                state.name
+                  .toLowerCase() ===
+                detectedState
+                  .toLowerCase(),
+            );
+
+          if (stateMatch) {
+            matchedState =
+              stateMatch.name;
+          }
 
           setForm(
             (current) => ({
@@ -629,7 +1012,7 @@ function SetupPage() {
                 current.state,
 
               district:
-                matchedDistrict ||
+                detectedDistrict ||
                 current.district,
 
               village:
@@ -638,13 +1021,28 @@ function SetupPage() {
             }),
           );
 
+          if (matchedState) {
+
+            await loadDistricts(
+              matchedState,
+            );
+
+            if (detectedDistrict) {
+
+              await loadVillages(
+                matchedState,
+                detectedDistrict,
+              );
+
+            }
+          }
 
           setMessage(
             `📍 Location detected: ${
               detectedVillage ||
               "Current location"
             }, ${
-              matchedDistrict ||
+              detectedDistrict ||
               "District"
             }, ${
               matchedState ||
@@ -652,38 +1050,19 @@ function SetupPage() {
             }`,
           );
 
-
           toast.success(
             "Location detected successfully 📍",
           );
 
         } catch (reverseError) {
+
           console.error(
             "Reverse geocoding error:",
             reverseError,
           );
 
-
-          /*
-           * Even if state/district lookup
-           * fails, GPS coordinates are saved.
-           */
-
-          setForm(
-            (current) => ({
-              ...current,
-
-              latitude:
-                latitudeText,
-
-              longitude:
-                longitudeText,
-            }),
-          );
-
-
           setMessage(
-            "📍 GPS captured. State and district could not be detected automatically. Please select them manually.",
+            "📍 GPS captured. Please select state, district and village manually.",
           );
 
           toast.success(
@@ -691,11 +1070,14 @@ function SetupPage() {
           );
 
         } finally {
+
           setGettingLocation(false);
+
         }
       },
 
       (locationError) => {
+
         console.error(
           "GPS error:",
           locationError,
@@ -707,27 +1089,35 @@ function SetupPage() {
           locationError.code ===
           1
         ) {
+
           setError(
             "Location permission denied. Please allow location access.",
           );
+
         } else if (
           locationError.code ===
           2
         ) {
+
           setError(
             "Your location could not be determined.",
           );
+
         } else if (
           locationError.code ===
           3
         ) {
+
           setError(
             "Location request timed out. Please try again.",
           );
+
         } else {
+
           setError(
             "Unable to get your current location.",
           );
+
         }
       },
 
@@ -745,10 +1135,11 @@ function SetupPage() {
   ======================================================= */
 
   function validateStep() {
+
     if (step === 0) {
-      if (
-        !form.farmerName.trim()
-      ) {
+
+      if (!form.farmerName.trim()) {
+
         toast.error(
           "Please enter farmer name.",
         );
@@ -756,9 +1147,8 @@ function SetupPage() {
         return false;
       }
 
-      if (
-        !form.phone.trim()
-      ) {
+      if (!form.phone.trim()) {
+
         toast.error(
           "Please enter mobile number.",
         );
@@ -776,6 +1166,7 @@ function SetupPage() {
         mobile.length !==
         10
       ) {
+
         toast.error(
           "Please enter a valid 10-digit mobile number.",
         );
@@ -783,9 +1174,8 @@ function SetupPage() {
         return false;
       }
 
-      if (
-        !form.farmName.trim()
-      ) {
+      if (!form.farmName.trim()) {
+
         toast.error(
           "Please enter farm name.",
         );
@@ -793,9 +1183,8 @@ function SetupPage() {
         return false;
       }
 
-      if (
-        !form.state.trim()
-      ) {
+      if (!form.state.trim()) {
+
         toast.error(
           "Please select state.",
         );
@@ -803,9 +1192,8 @@ function SetupPage() {
         return false;
       }
 
-      if (
-        !form.district.trim()
-      ) {
+      if (!form.district.trim()) {
+
         toast.error(
           "Please select district.",
         );
@@ -813,11 +1201,10 @@ function SetupPage() {
         return false;
       }
 
-      if (
-        !form.village.trim()
-      ) {
+      if (!form.village.trim()) {
+
         toast.error(
-          "Please enter village.",
+          "Please select village.",
         );
 
         return false;
@@ -828,15 +1215,15 @@ function SetupPage() {
 
 
     if (step === 1) {
+
       const area =
-        Number(
-          form.area,
-        );
+        Number(form.area);
 
       if (
         !Number.isFinite(area) ||
         area <= 0
       ) {
+
         toast.error(
           "Please enter valid farm area.",
         );
@@ -844,9 +1231,8 @@ function SetupPage() {
         return false;
       }
 
-      if (
-        !form.unit
-      ) {
+      if (!form.unit) {
+
         toast.error(
           "Please select area unit.",
         );
@@ -859,9 +1245,9 @@ function SetupPage() {
 
 
     if (step === 2) {
-      if (
-        !form.cropId
-      ) {
+
+      if (!form.cropId) {
+
         toast.error(
           "Please select crop.",
         );
@@ -874,9 +1260,9 @@ function SetupPage() {
 
 
     if (step === 3) {
-      if (
-        !form.soilId
-      ) {
+
+      if (!form.soilId) {
+
         toast.error(
           "Please select soil type.",
         );
@@ -887,7 +1273,6 @@ function SetupPage() {
       return true;
     }
 
-
     return true;
   }
 
@@ -897,40 +1282,14 @@ function SetupPage() {
   ======================================================= */
 
   async function saveFarm() {
+
     setError("");
     setMessage("");
-
-    if (
-      !validateStep()
-    ) {
-      return;
-    }
-
-    /*
-     * Final validation
-     */
-
-    for (
-      let i = 0;
-      i < 4;
-      i++
-    ) {
-      setStep(i);
-
-      if (!validateStep()) {
-        return;
-      }
-    }
-
-    /*
-     * Restore final step
-     */
-
-    setStep(3);
 
     setSaving(true);
 
     try {
+
       const {
         data: {
           user,
@@ -939,6 +1298,7 @@ function SetupPage() {
         await supabase.auth.getUser();
 
       if (!user) {
+
         setError(
           "Please login first.",
         );
@@ -947,12 +1307,10 @@ function SetupPage() {
       }
 
       const areaValue =
-        Number(
-          form.area,
-        );
-
+        Number(form.area);
 
       const payload = {
+
         user_id:
           user.id,
 
@@ -1011,14 +1369,8 @@ function SetupPage() {
       let result;
 
 
-      /*
-       * EXISTING FARM
-       * UPDATE
-       */
+      if (selectedFarmId) {
 
-      if (
-        selectedFarmId
-      ) {
         result =
           await supabase
             .from("farms")
@@ -1038,11 +1390,6 @@ function SetupPage() {
 
       } else {
 
-        /*
-         * NEW FARM
-         * INSERT
-         */
-
         result =
           await supabase
             .from("farms")
@@ -1054,9 +1401,8 @@ function SetupPage() {
       }
 
 
-      if (
-        result.error
-      ) {
+      if (result.error) {
+
         console.error(
           "Farm save error:",
           result.error,
@@ -1074,11 +1420,8 @@ function SetupPage() {
         result.data as FarmRow;
 
 
-      /*
-       * UPDATE LOCAL FARM CONTEXT
-       */
-
       updateFarm({
+
         id:
           savedFarm.id,
 
@@ -1121,6 +1464,11 @@ function SetupPage() {
         soilId:
           savedFarm.soil_id ??
           "loamy",
+   latitude:
+  savedFarm.latitude,
+
+longitude:
+  savedFarm.longitude,
 
         setupComplete:
           true,
@@ -1129,10 +1477,9 @@ function SetupPage() {
 
       setMessage(
         selectedFarmId
-          ? "Farm updated successfully."
-          : "New farm created successfully.",
+          ? "Farm updated successfully 🌱"
+          : "New farm created successfully 🌱",
       );
-
 
       toast.success(
         selectedFarmId
@@ -1141,22 +1488,15 @@ function SetupPage() {
       );
 
 
-      /*
-       * Reload farms
-       */
-
       await loadFarms();
 
-
-      /*
-       * Dashboard
-       */
 
       navigate({
         to: "/app",
       });
 
     } catch (err) {
+
       console.error(
         "Save farm error:",
         err,
@@ -1165,8 +1505,11 @@ function SetupPage() {
       setError(
         "Something went wrong while saving the farm.",
       );
+
     } finally {
+
       setSaving(false);
+
     }
   }
 
@@ -1179,6 +1522,7 @@ function SetupPage() {
     id: string,
     name: string,
   ) {
+
     if (saving) {
       return;
     }
@@ -1195,6 +1539,7 @@ function SetupPage() {
     setSaving(true);
 
     try {
+
       const {
         data: {
           user,
@@ -1203,6 +1548,7 @@ function SetupPage() {
         await supabase.auth.getUser();
 
       if (!user) {
+
         setError(
           "Please login first.",
         );
@@ -1227,9 +1573,8 @@ function SetupPage() {
           );
 
 
-      if (
-        deleteError
-      ) {
+      if (deleteError) {
+
         console.error(
           "Delete error:",
           deleteError,
@@ -1251,37 +1596,16 @@ function SetupPage() {
       if (
         selectedFarmId === id
       ) {
-        setSelectedFarmId(
-          null,
-        );
 
-        setForm({
-          farmerName: "",
-          phone: "",
-          farmName: "",
-          state: "",
-          district: "",
-          village: "",
-          cropId:
-            CROPS[0]?.id ??
-            "rice",
-          soilId:
-            SOILS[0]?.id ??
-            "loamy",
-          area: "1",
-          unit:
-            AREA_UNITS[0]?.id ??
-            "acre",
-          latitude: "",
-          longitude: "",
-          language: "en",
-        });
+        handleNewFarm();
+
       }
 
 
       await loadFarms();
 
     } catch (err) {
+
       console.error(
         "Delete farm error:",
         err,
@@ -1290,8 +1614,11 @@ function SetupPage() {
       setError(
         "Farm could not be deleted.",
       );
+
     } finally {
+
       setSaving(false);
+
     }
   }
 
@@ -1301,9 +1628,8 @@ function SetupPage() {
   ======================================================= */
 
   async function next() {
-    if (
-      !validateStep()
-    ) {
+
+    if (!validateStep()) {
       return;
     }
 
@@ -1311,6 +1637,7 @@ function SetupPage() {
       step <
       STEPS.length - 1
     ) {
+
       setStep(
         (current) =>
           current + 1,
@@ -1370,6 +1697,7 @@ function SetupPage() {
   ======================================================= */
 
   return (
+
     <div className="min-h-screen gradient-soft pb-16">
 
       {/* =================================================
@@ -1400,6 +1728,7 @@ function SetupPage() {
 
       <div className="mx-auto max-w-[1000px] px-4 pt-8 sm:px-6">
 
+
         {/* =================================================
             FARM MANAGEMENT
         ================================================= */}
@@ -1409,6 +1738,7 @@ function SetupPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
 
             <div>
+
               <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
                 My Farms
               </p>
@@ -1416,6 +1746,7 @@ function SetupPage() {
               <p className="mt-1 text-sm font-semibold">
                 Select a farm or create a new one
               </p>
+
             </div>
 
 
@@ -1426,10 +1757,15 @@ function SetupPage() {
               onClick={
                 handleNewFarm
               }
-              disabled={saving}
+              disabled={
+                saving
+              }
             >
+
               <Plus className="h-4 w-4" />
+
               New Farm
+
             </Button>
 
           </div>
@@ -1497,10 +1833,13 @@ function SetupPage() {
                             </p>
 
                             <p className="mt-1 text-xs font-semibold text-muted-foreground">
+
                               {savedFarm.area ??
                                 0}{" "}
+
                               {savedFarm.area_unit ??
                                 "acre"}
+
                             </p>
 
                           </div>
@@ -1508,9 +1847,13 @@ function SetupPage() {
 
                           {selectedFarmId ===
                             savedFarm.id && (
+
                             <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full gradient-leaf text-forest">
+
                               <Check className="h-4 w-4" />
+
                             </span>
+
                           )}
 
                         </div>
@@ -1534,6 +1877,7 @@ function SetupPage() {
                           Edit
                         </Button>
 
+
                         <Button
                           type="button"
                           size="sm"
@@ -1546,9 +1890,13 @@ function SetupPage() {
                                 "this farm",
                             )
                           }
-                          disabled={saving}
+                          disabled={
+                            saving
+                          }
                         >
+
                           <Trash2 className="h-4 w-4" />
+
                         </Button>
 
                       </div>
@@ -1570,16 +1918,24 @@ function SetupPage() {
         ================================================= */}
 
         {message && (
+
           <div className="mb-4 rounded-2xl border border-green-300 bg-green-50 p-4 text-sm font-semibold text-green-700">
+
             {message}
+
           </div>
+
         )}
 
 
         {error && (
+
           <div className="mb-4 rounded-2xl border border-red-300 bg-red-50 p-4 text-sm font-semibold text-red-700">
+
             {error}
+
           </div>
+
         )}
 
 
@@ -1662,8 +2018,11 @@ function SetupPage() {
               <div className="space-y-4">
 
                 <h2 className="flex items-center gap-2 font-display text-xl font-bold">
+
                   <MapPin className="h-5 w-5 text-primary" />
+
                   Farm Details
+
                 </h2>
 
 
@@ -1767,39 +2126,37 @@ function SetupPage() {
                     value={
                       form.state
                     }
-                    onValueChange={(
-                      value,
-                    ) => {
-
-                      updateField(
-                        "state",
-                        value,
-                      );
-
-                      updateField(
-                        "district",
-                        DISTRICTS[
-                          value
-                        ]?.[0] ??
-                          "",
-                      );
-                    }}
+                    onValueChange={
+                      handleStateChange
+                    }
                   >
 
                     <SelectTrigger className="h-12 rounded-2xl">
-                      <SelectValue placeholder="Select state" />
+
+                      <SelectValue
+                        placeholder={
+                          loadingStates
+                            ? "Loading states..."
+                            : "Select state"
+                        }
+                      />
+
                     </SelectTrigger>
 
                     <SelectContent>
 
-                      {STATES.map(
+                      {locationStates.map(
                         (state) => (
 
                           <SelectItem
-                            key={state}
-                            value={state}
+                            key={
+                              state.code
+                            }
+                            value={
+                              state.name
+                            }
                           >
-                            {state}
+                            {state.name}
                           </SelectItem>
 
                         ),
@@ -1824,39 +2181,43 @@ function SetupPage() {
                     value={
                       form.district
                     }
-                    onValueChange={(
-                      value,
-                    ) =>
-                      updateField(
-                        "district",
-                        value,
-                      )
+                    disabled={
+                      !form.state ||
+                      loadingDistricts
+                    }
+                    onValueChange={
+                      handleDistrictChange
                     }
                   >
 
                     <SelectTrigger className="h-12 rounded-2xl">
-                      <SelectValue placeholder="Select district" />
+
+                      <SelectValue
+                        placeholder={
+                          loadingDistricts
+                            ? "Loading districts..."
+                            : form.state
+                              ? "Select district"
+                              : "Select state first"
+                        }
+                      />
+
                     </SelectTrigger>
 
                     <SelectContent>
 
-                      {(
-                        DISTRICTS[
-                          form.state
-                        ] ??
-                        []
-                      ).map(
+                      {locationDistricts.map(
                         (district) => (
 
                           <SelectItem
                             key={
-                              district
+                              district.code
                             }
                             value={
-                              district
+                              district.name
                             }
                           >
-                            {district}
+                            {district.name}
                           </SelectItem>
 
                         ),
@@ -1877,38 +2238,76 @@ function SetupPage() {
                     Village / Town
                   </Label>
 
-                  <div className="relative">
+                  <Select
+                    value={
+                      form.village
+                    }
+                    disabled={
+                      !form.district ||
+                      loadingVillages
+                    }
+                    onValueChange={
+                      handleVillageChange
+                    }
+                  >
 
-                    <Input
-                      value={
-                        form.village
-                      }
-                      onChange={(e) =>
-                        updateField(
-                          "village",
-                          e.target.value,
-                        )
-                      }
-                      className="h-12 rounded-2xl pr-12"
-                      placeholder="Enter village or town"
-                    />
+                    <SelectTrigger className="h-12 rounded-2xl">
 
-                    <button
-                      type="button"
-                      aria-label="Voice input"
-                      onClick={() =>
-                        toast(
-                          "🎙️ Listening... (demo voice input)",
-                        )
-                      }
-                      className="absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full gradient-leaf text-forest"
-                    >
-                      <Mic className="h-4 w-4" />
-                    </button>
+                      <SelectValue
+                        placeholder={
+                          loadingVillages
+                            ? "Loading villages..."
+                            : form.district
+                              ? "Select village"
+                              : "Select district first"
+                        }
+                      />
 
-                  </div>
+                    </SelectTrigger>
+
+                    <SelectContent>
+
+                      {locationVillages.map(
+                        (village) => (
+
+                          <SelectItem
+                            key={`${village.code}-${village.name}`}
+                            value={
+                              village.name
+                            }
+                          >
+
+                            {village.name}
+
+                          </SelectItem>
+
+                        ),
+                      )}
+
+                    </SelectContent>
+
+                  </Select>
 
                 </div>
+
+
+                {/* VOICE DEMO */}
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    toast(
+                      "🎙️ Listening... (demo voice input)",
+                    )
+                  }
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border bg-secondary/40 px-4 py-3 text-sm font-bold"
+                >
+
+                  <Mic className="h-4 w-4" />
+
+                  Voice Input
+
+                </button>
 
 
                 {/* GPS */}
@@ -1948,6 +2347,7 @@ function SetupPage() {
                     <div className="mt-2 grid grid-cols-2 gap-3">
 
                       <div>
+
                         <p className="text-[10px] text-muted-foreground">
                           Latitude
                         </p>
@@ -1955,9 +2355,11 @@ function SetupPage() {
                         <p className="text-sm font-bold">
                           {form.latitude}
                         </p>
+
                       </div>
 
                       <div>
+
                         <p className="text-[10px] text-muted-foreground">
                           Longitude
                         </p>
@@ -1965,6 +2367,7 @@ function SetupPage() {
                         <p className="text-sm font-bold">
                           {form.longitude}
                         </p>
+
                       </div>
 
                     </div>
@@ -2003,12 +2406,14 @@ function SetupPage() {
                     </p>
 
                     <p className="text-[11px] text-muted-foreground">
+
                       {form.district ||
                         "District"}
 
                       {form.state
                         ? `, ${form.state}`
                         : ""}
+
                     </p>
 
                   </span>
@@ -2033,8 +2438,11 @@ function SetupPage() {
               <div className="space-y-4">
 
                 <h2 className="flex items-center gap-2 font-display text-xl font-bold">
+
                   <Ruler className="h-5 w-5 text-primary" />
+
                   Farm Area
+
                 </h2>
 
 
@@ -2084,7 +2492,9 @@ function SetupPage() {
                   >
 
                     <SelectTrigger className="h-12 rounded-2xl">
+
                       <SelectValue />
+
                     </SelectTrigger>
 
                     <SelectContent>
@@ -2120,15 +2530,20 @@ function SetupPage() {
                   </p>
 
                   <p className="mt-2 font-display text-2xl font-extrabold">
+
                     {form.area}{" "}
+
                     {selectedUnit?.label ??
                       form.unit}
+
                   </p>
 
                   <p className="mt-1 text-sm text-muted-foreground">
+
                     Approximately{" "}
                     {areaHa}{" "}
                     hectares
+
                   </p>
 
                 </Card>
@@ -2160,9 +2575,12 @@ function SetupPage() {
                     </p>
 
                     <p className="text-sm text-muted-foreground">
+
                       {form.area}{" "}
+
                       {selectedUnit?.label ??
                         form.unit}
+
                     </p>
 
                   </div>
@@ -2182,70 +2600,102 @@ function SetupPage() {
 
           {step === 2 && (
 
-            <div className="space-y-5">
+            <div className="grid gap-6 md:grid-cols-[1fr_1fr]">
 
-              <h2 className="font-display text-xl font-bold">
-                Select Crop
-              </h2>
+              <div className="space-y-4">
 
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <h2 className="font-display text-xl font-bold">
+                  Crop
+                </h2>
 
-                {CROPS.map(
-                  (c) => (
+                <div className="grid gap-2 sm:grid-cols-2">
 
-                    <button
-                      key={
-                        c.id
-                      }
-                      type="button"
-                      onClick={() =>
-                        updateField(
-                          "cropId",
-                          c.id,
-                        )
-                      }
-                      className={cn(
-                        "relative overflow-hidden rounded-2xl border-2 text-left transition-all",
-                        form.cropId ===
-                          c.id
-                          ? "border-primary bg-secondary shadow-card"
-                          : "border-border hover:border-primary/40",
-                      )}
-                    >
+                  {CROPS.map(
+                    (crop) => (
 
-                      <div className="grid h-24 place-items-center bg-secondary/40">
-
-                        <span className="text-4xl">
-                          {c.emoji}
-                        </span>
-
-                        {form.cropId ===
-                          c.id && (
-
-                          <span className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full gradient-leaf text-forest">
-                            <Check className="h-4 w-4" />
-                          </span>
-
+                      <button
+                        key={
+                          crop.id
+                        }
+                        type="button"
+                        onClick={() =>
+                          updateField(
+                            "cropId",
+                            crop.id,
+                          )
+                        }
+                        className={cn(
+                          "rounded-2xl border-2 p-4 text-left transition-all",
+                          form.cropId ===
+                            crop.id
+                            ? "border-primary bg-secondary"
+                            : "border-border hover:border-primary/40",
                         )}
+                      >
 
-                      </div>
-
-                      <div className="p-3">
-
-                        <p className="text-sm font-bold">
-                          {c.name}
+                        <p className="text-2xl">
+                          {crop.emoji}
                         </p>
 
-                        <p className="text-xs text-muted-foreground">
-                          {c.season}
+                        <p className="mt-2 text-sm font-bold">
+                          {crop.name}
                         </p>
 
-                      </div>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          ₹{crop.price}/quintal
+                        </p>
 
-                    </button>
+                      </button>
 
-                  ),
-                )}
+                    ),
+                  )}
+
+                </div>
+
+              </div>
+
+
+              <div className="relative overflow-hidden rounded-2xl">
+
+                <img
+                  src={cropRice}
+                  width={1024}
+                  height={700}
+                  loading="lazy"
+                  alt="Crop field"
+                  className="h-64 w-full object-cover"
+                />
+
+                <div className="absolute inset-0 bg-forest/20" />
+
+                <div className="absolute inset-x-4 bottom-4">
+
+                  <div className="glass rounded-2xl p-4">
+
+                    <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                      Selected Crop
+                    </p>
+
+                    <p className="mt-1 font-display text-xl font-extrabold">
+
+                      {CROPS.find(
+                        (c) =>
+                          c.id ===
+                          form.cropId,
+                      )?.emoji}{" "}
+
+                      {CROPS.find(
+                        (c) =>
+                          c.id ===
+                          form.cropId,
+                      )?.name ??
+                        "Crop"}
+
+                    </p>
+
+                  </div>
+
+                </div>
 
               </div>
 
@@ -2260,7 +2710,7 @@ function SetupPage() {
 
           {step === 3 && (
 
-            <div className="grid gap-6 md:grid-cols-[1.2fr_1fr]">
+            <div className="grid gap-6 md:grid-cols-[1fr_1fr]">
 
               <div className="space-y-4">
 
@@ -2334,7 +2784,9 @@ function SetupPage() {
                   </p>
 
                   <p className="font-display text-lg font-extrabold">
+
                     {recommended[0]?.emoji}{" "}
+
                     {recommended[0]?.name ??
                       CROPS.find(
                         (c) =>
@@ -2342,17 +2794,23 @@ function SetupPage() {
                           form.cropId,
                       )?.name ??
                       "Crop"}
+
                   </p>
 
                   <p className="text-xs text-muted-foreground">
+
                     Based on{" "}
+
                     {selectedSoil?.name ??
                       "selected soil"}{" "}
+
                     soil and current demo
                     conditions.
 
                     {" "}
+
                     Also suitable:{" "}
+
                     {recommended
                       .slice(1)
                       .map(
@@ -2363,7 +2821,9 @@ function SetupPage() {
                         ", ",
                       ) ||
                       "—"}
+
                     .
+
                   </p>
 
                 </Card>
@@ -2422,13 +2882,14 @@ function SetupPage() {
               {saving
                 ? "Saving..."
                 : step ===
-                    STEPS.length -
-                      1
+                    STEPS.length - 1
                   ? "Save & Open Dashboard"
                   : "Continue"}
 
               {!saving && (
+
                 <ArrowRight className="h-5 w-5" />
+
               )}
 
             </Button>
@@ -2455,10 +2916,12 @@ function SetupPage() {
               </p>
 
               <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+
                 Use Current Location automatically
                 detects your latitude, longitude,
                 state, district and nearby village.
                 You can still change them manually.
+
               </p>
 
             </div>

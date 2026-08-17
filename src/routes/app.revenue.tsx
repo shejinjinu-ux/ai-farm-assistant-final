@@ -7,6 +7,7 @@ import {
   Wheat,
   RefreshCw,
 } from "lucide-react";
+
 import {
   BarChart,
   Bar,
@@ -19,6 +20,7 @@ import {
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+
 import {
   DemoBadge,
   PageHeader,
@@ -35,204 +37,367 @@ export const Route = createFileRoute("/app/revenue")({
       "Revenue & Profit",
       "Estimated farm revenue, costs and profit based on AI predicted yield."
     ),
+
   component: Revenue,
 });
 
 function Revenue() {
   const { farm, crop, areaHa } = useFarm();
 
-  const [predictedYield, setPredictedYield] = useState<number>(0);
-  const [loading, setLoading] = useState(false);
+  const [predictedYield, setPredictedYield] =
+    useState<number>(0);
+
+  const [loading, setLoading] =
+    useState(false);
 
   /*
-   * ---------------------------------------------------------
-   * AI YIELD + REVENUE CALCULATION
-   * ---------------------------------------------------------
+   * ========================================================
+   * AI YIELD PREDICTION
+   * ========================================================
    */
 
   const getPrediction = async () => {
     try {
       setLoading(true);
 
-      /*
-       * IMPORTANT:
-       * Your backend /predict returns:
-       *
-       * expected_yield_per_hectare
-       * estimated_total_production
-       *
-       * expected_yield_per_hectare is in KG/HECTARE.
-       *
-       * We convert KG -> TON here.
-       */
-
       const response = await fetch(
-        `https://ai-farm-backend-v57r.onrender.com/predict`,
+        "https://ai-farm-backend-v57r.onrender.com/predict",
         {
           method: "POST",
+
           headers: {
             Accept: "application/json",
             "Content-Type": "application/json",
           },
+
           body: JSON.stringify({
             state: farm?.state ?? "Tamil Nadu",
-            district: farm?.district ?? "Madurai",
-            crop: crop?.name ?? "Wheat",
-            area: Number(areaHa) || 1,
 
-            // Sensor / soil values
+            district:
+              farm?.district ?? "Madurai",
+
+            crop:
+              crop?.name ?? "Wheat",
+
+            area:
+              Number(areaHa) || 1,
+
+            /*
+             * Demo sensor values.
+             * These can later be replaced by
+             * actual sensor values.
+             */
+
             N: 40,
             P: 30,
             K: 35,
+
             temperature: 27.7,
             humidity: 65,
             ph: 6.5,
             rainfall: 500,
             wind_speed: 20.6,
             solar_radiation: 0,
+
             soil_type: "Laterite",
           }),
         }
       );
 
       if (!response.ok) {
-        throw new Error("Prediction API failed");
+        throw new Error(
+          "Prediction API failed"
+        );
       }
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
-      console.log("REVENUE PREDICTION RESPONSE:", data);
+      console.log(
+        "REVENUE PREDICTION RESPONSE:",
+        data
+      );
 
-      if (data?.success && data?.expected_yield_per_hectare != null) {
+      if (
+        data?.success &&
+        data?.expected_yield_per_hectare != null
+      ) {
         /*
-         * Backend gives KG/ha.
+         * Backend returns KG / hectare.
          *
-         * Example:
-         * 2703.76 kg/ha
+         * Convert:
          *
-         * 2703.76 / 1000
-         * = 2.70376 tons/ha
+         * KG / ha
+         *      ↓
+         * Tons / ha
          */
+
         const yieldTonsPerHa =
-          Number(data.expected_yield_per_hectare) / 1000;
+          Number(
+            data.expected_yield_per_hectare
+          ) / 1000;
 
-        setPredictedYield(yieldTonsPerHa);
+        setPredictedYield(
+          yieldTonsPerHa
+        );
       } else {
-        /*
-         * Safe fallback.
-         */
         setPredictedYield(2.5);
       }
     } catch (error) {
-      console.error("Revenue prediction error:", error);
+      console.error(
+        "Revenue prediction error:",
+        error
+      );
 
       /*
-       * If backend is temporarily unavailable,
-       * keep the page usable.
+       * Safe demo fallback.
        */
+
       setPredictedYield(2.5);
     } finally {
       setLoading(false);
     }
   };
 
+  /*
+   * ========================================================
+   * RUN AI PREDICTION
+   * ========================================================
+   */
+
   useEffect(() => {
     getPrediction();
-  }, [areaHa, crop?.name, farm?.state, farm?.district]);
+  }, [
+    areaHa,
+    crop?.name,
+    farm?.state,
+    farm?.district,
+  ]);
 
   /*
-   * ---------------------------------------------------------
-   * PRODUCTION
-   * ---------------------------------------------------------
+   * ========================================================
+   * TOTAL PRODUCTION
+   * ========================================================
+   *
+   * predictedYield = tons / hectare
+   *
+   * production =
+   * tons / hectare × hectares
    */
 
   const production = useMemo(() => {
-    return predictedYield * Number(areaHa || 0);
-  }, [predictedYield, areaHa]);
+    return (
+      predictedYield *
+      Number(areaHa || 0)
+    );
+  }, [
+    predictedYield,
+    areaHa,
+  ]);
 
   /*
-   * ---------------------------------------------------------
+   * ========================================================
    * CROP PRICE
-   * ---------------------------------------------------------
+   * ========================================================
    *
-   * crop.price is treated as ₹ / quintal.
+   * crop.price = ₹ / quintal
    *
    * 1 ton = 10 quintals
    *
    * Revenue =
-   * production(tons) × 10 × price(₹/quintal)
+   *
+   * production × 10 × price
    */
+
+  const cropPrice = Number(
+    crop?.price || 0
+  );
 
   const revenue = useMemo(() => {
     return Math.round(
-      production * 10 * Number(crop?.price || 0)
+      production *
+        10 *
+        cropPrice
     );
-  }, [production, crop?.price]);
+  }, [
+    production,
+    cropPrice,
+  ]);
 
   /*
-   * ---------------------------------------------------------
-   * FARM COSTS
-   * ---------------------------------------------------------
+   * ========================================================
+   * ESTIMATED FARM COST
+   * ========================================================
+   *
+   * Instead of a fixed ₹34,000 / hectare,
+   * we estimate the total farming cost based
+   * on the expected revenue.
+   *
+   * This keeps the demo economics proportional
+   * to the actual predicted production.
+   *
+   * Total estimated cost = 60% of revenue
    */
-
-  const costs = useMemo(
-    () => ({
-      Seeds: Math.round(Number(areaHa || 0) * 5200),
-
-      Fertilizer: Math.round(Number(areaHa || 0) * 11800),
-
-      Irrigation: Math.round(Number(areaHa || 0) * 7200),
-
-      "Crop care": Math.round(Number(areaHa || 0) * 5800),
-
-      "Other costs": Math.round(Number(areaHa || 0) * 4000),
-    }),
-    [areaHa]
-  );
 
   const totalCost = useMemo(() => {
-    return Object.values(costs).reduce(
-      (sum, value) => sum + value,
-      0
+    if (revenue <= 0) {
+      return 0;
+    }
+
+    return Math.round(
+      revenue * 0.60
     );
-  }, [costs]);
+  }, [revenue]);
 
   /*
-   * ---------------------------------------------------------
+   * ========================================================
+   * COST BREAKDOWN
+   * ========================================================
+   *
+   * Total cost is divided into practical
+   * farming expense categories.
+   */
+
+  const costs = useMemo(() => {
+    return {
+      Seeds: Math.round(
+        totalCost * 0.20
+      ),
+
+      Fertilizer: Math.round(
+        totalCost * 0.25
+      ),
+
+      Irrigation: Math.round(
+        totalCost * 0.20
+      ),
+
+      "Crop care": Math.round(
+        totalCost * 0.20
+      ),
+
+      "Other costs": Math.round(
+        totalCost * 0.15
+      ),
+    };
+  }, [totalCost]);
+
+  /*
+   * ========================================================
    * PROFIT
-   * ---------------------------------------------------------
+   * ========================================================
    */
 
-  const profit = revenue - totalCost;
+  const profit = useMemo(() => {
+    return revenue - totalCost;
+  }, [
+    revenue,
+    totalCost,
+  ]);
 
   /*
-   * ---------------------------------------------------------
+   * ========================================================
+   * PROFIT MARGIN
+   * ========================================================
+   */
+
+  const profitMargin = useMemo(() => {
+    if (revenue <= 0) {
+      return 0;
+    }
+
+    return (
+      (profit / revenue) *
+      100
+    );
+  }, [
+    profit,
+    revenue,
+  ]);
+
+  /*
+   * ========================================================
+   * WHAT-IF OPTIMIZATION
+   * ========================================================
+   *
+   * Assume optimized farming practices
+   * improve production by 10%.
+   */
+
+  const optimizedProduction =
+    production * 1.10;
+
+  const optimizedRevenue =
+    Math.round(
+      optimizedProduction *
+        10 *
+        cropPrice
+    );
+
+  /*
+   * Optimized cost is slightly higher because
+   * better irrigation / fertilizer / crop care
+   * may require additional input.
+   */
+
+  const optimizedCost =
+    Math.round(
+      optimizedRevenue * 0.62
+    );
+
+  const optimizedProfit =
+    optimizedRevenue -
+    optimizedCost;
+
+  const additionalRevenue =
+    optimizedRevenue -
+    revenue;
+
+  const additionalProfit =
+    optimizedProfit -
+    profit;
+
+  /*
+   * ========================================================
    * CHART DATA
-   * ---------------------------------------------------------
+   * ========================================================
    */
 
-  const costData = Object.entries(costs).map(
-    ([name, value]) => ({
-      name,
-      value,
-    })
-  );
+  const costData =
+    Object.entries(costs).map(
+      ([name, value]) => ({
+        name,
+        value,
+      })
+    );
 
   /*
-   * ---------------------------------------------------------
-   * FORMATTING
-   * ---------------------------------------------------------
+   * ========================================================
+   * MONEY FORMAT
+   * ========================================================
    */
 
-  const money = (value: number) =>
-    `₹${Math.round(value).toLocaleString("en-IN")}`;
+  const money = (
+    value: number
+  ) =>
+    `₹${Math.round(
+      value
+    ).toLocaleString(
+      "en-IN"
+    )}`;
+
+  /*
+   * ========================================================
+   * UI
+   * ========================================================
+   */
 
   return (
     <div className="space-y-6">
 
-      {/* -------------------------------------------------- */}
-      {/* PAGE HEADER */}
-      {/* -------------------------------------------------- */}
+      {/* ================================================== */}
+      {/* HEADER */}
+      {/* ================================================== */}
 
       <PageHeader
         title="Revenue & Profit"
@@ -240,35 +405,41 @@ function Revenue() {
           crop?.name ?? "Crop"
         } · ${areaHa} hectares`}
         badge={
-          <DemoBadge label="Live AI Estimate" />
+          <DemoBadge label="AI Estimate" />
         }
       />
 
-      {/* -------------------------------------------------- */}
-      {/* REFRESH BUTTON */}
-      {/* -------------------------------------------------- */}
+      {/* ================================================== */}
+      {/* REFRESH */}
+      {/* ================================================== */}
 
       <div className="flex justify-end">
+
         <Button
           onClick={getPrediction}
           disabled={loading}
           className="rounded-full bg-primary px-6 font-bold"
         >
+
           <RefreshCw
             className={`mr-2 h-4 w-4 ${
-              loading ? "animate-spin" : ""
+              loading
+                ? "animate-spin"
+                : ""
             }`}
           />
 
           {loading
             ? "Updating AI Estimate..."
             : "Refresh AI Estimate"}
+
         </Button>
+
       </div>
 
-      {/* -------------------------------------------------- */}
+      {/* ================================================== */}
       {/* MAIN STATS */}
-      {/* -------------------------------------------------- */}
+      {/* ================================================== */}
 
       <div className="grid gap-4 sm:grid-cols-3">
 
@@ -278,16 +449,16 @@ function Revenue() {
           }
           label="Expected revenue"
           value={money(revenue)}
-          hint="Based on predicted production"
+          hint="Based on AI predicted production"
         />
 
         <StatCard
           icon={
             <ReceiptText className="h-5 w-5 text-earth" />
           }
-          label="Total cost"
+          label="Estimated cost"
           value={money(totalCost)}
-          hint="Estimated season cost"
+          hint="Estimated farming expenses"
         />
 
         <StatCard
@@ -297,18 +468,20 @@ function Revenue() {
           }
           label="Estimated profit"
           value={money(profit)}
-          hint="Revenue − cost"
+          hint={`${profitMargin.toFixed(
+            1
+          )}% profit margin`}
         />
 
       </div>
 
-      {/* -------------------------------------------------- */}
-      {/* PRODUCTION + COST CHART */}
-      {/* -------------------------------------------------- */}
+      {/* ================================================== */}
+      {/* PRODUCTION + COST */}
+      {/* ================================================== */}
 
       <div className="grid gap-4 lg:grid-cols-3">
 
-        {/* PRODUCTION CARD */}
+        {/* PRODUCTION */}
 
         <Card className="gap-4 p-5 shadow-card">
 
@@ -325,11 +498,16 @@ function Revenue() {
             </p>
 
             <p className="mt-1 font-display text-3xl font-extrabold">
-              {predictedYield.toFixed(2)} t/ha
+              {predictedYield.toFixed(
+                2
+              )}{" "}
+              t/ha
             </p>
 
             <p className="mt-1 text-sm text-muted-foreground">
-              {production.toFixed(2)} tons across{" "}
+              {production.toFixed(
+                2
+              )} tons across{" "}
               {areaHa} ha
             </p>
 
@@ -342,12 +520,15 @@ function Revenue() {
             </p>
 
             <p className="mt-1 font-display text-xl font-extrabold">
-              {money(Number(crop?.price || 0))} /{" "}
-              {crop?.unit ?? "quintal"}
+              {money(
+                cropPrice
+              )} /{" "}
+              {crop?.unit ??
+                "quintal"}
             </p>
 
             <p className="mt-1 text-xs text-muted-foreground">
-              Revenue calculation uses ₹/quintal.
+              1 ton = 10 quintals
             </p>
 
           </div>
@@ -369,7 +550,9 @@ function Revenue() {
               height="100%"
             >
 
-              <BarChart data={costData}>
+              <BarChart
+                data={costData}
+              >
 
                 <CartesianGrid
                   strokeDasharray="3 3"
@@ -389,7 +572,9 @@ function Revenue() {
                 />
 
                 <Tooltip
-                  formatter={(value: number) =>
+                  formatter={(
+                    value: number
+                  ) =>
                     money(value)
                   }
                 />
@@ -397,7 +582,12 @@ function Revenue() {
                 <Bar
                   dataKey="value"
                   fill="var(--chart-2)"
-                  radius={[8, 8, 0, 0]}
+                  radius={[
+                    8,
+                    8,
+                    0,
+                    0,
+                  ]}
                 />
 
               </BarChart>
@@ -410,43 +600,250 @@ function Revenue() {
 
       </div>
 
-      {/* -------------------------------------------------- */}
+      {/* ================================================== */}
       {/* SEASON ECONOMICS */}
-      {/* -------------------------------------------------- */}
+      {/* ================================================== */}
 
       <Card className="p-5 shadow-card">
 
         <h2 className="font-display text-xl font-bold">
-          Estimated season economics
+          Estimated farm economics
         </h2>
 
-        <div className="mt-4 divide-y rounded-2xl border">
+        <p className="mt-1 text-sm text-muted-foreground">
+          Estimated farm economics based on AI
+          predicted production.
+        </p>
 
-          <div className="flex justify-between p-4 text-sm">
-            <span>Expected revenue</span>
-            <b>{money(revenue)}</b>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+
+          {/* PRODUCTION */}
+
+          <div className="rounded-2xl bg-secondary/50 p-4">
+
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Expected production
+            </p>
+
+            <p className="mt-2 font-display text-2xl font-extrabold">
+              {(
+                production *
+                1000
+              ).toFixed(0)}{" "}
+              kg
+            </p>
+
           </div>
 
-          <div className="flex justify-between p-4 text-sm">
-            <span>Total estimated cost</span>
-            <b>{money(totalCost)}</b>
+          {/* PRICE */}
+
+          <div className="rounded-2xl bg-secondary/50 p-4">
+
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Crop price
+            </p>
+
+            <p className="mt-2 font-display text-2xl font-extrabold">
+              {money(
+                cropPrice
+              )}
+            </p>
+
+            <p className="text-xs text-muted-foreground">
+              per quintal
+            </p>
+
           </div>
 
-          <div className="flex justify-between bg-secondary/50 p-4 text-sm">
-            <span>Estimated profit</span>
+          {/* REVENUE */}
 
-            <b className="text-primary">
-              {money(profit)}
-            </b>
+          <div className="rounded-2xl bg-secondary/50 p-4">
+
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Estimated revenue
+            </p>
+
+            <p className="mt-2 font-display text-2xl font-extrabold">
+              {money(
+                revenue
+              )}
+            </p>
+
           </div>
+
+          {/* COST */}
+
+          <div className="rounded-2xl bg-secondary/50 p-4">
+
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Estimated cost
+            </p>
+
+            <p className="mt-2 font-display text-2xl font-extrabold">
+              {money(
+                totalCost
+              )}
+            </p>
+
+          </div>
+
+        </div>
+
+        {/* PROFIT */}
+
+        <div className="mt-4 rounded-2xl border p-5">
+
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Estimated profit
+          </p>
+
+          <p
+            className={`mt-2 font-display text-4xl font-extrabold ${
+              profit >= 0
+                ? "text-primary"
+                : "text-destructive"
+            }`}
+          >
+            {money(profit)}
+          </p>
+
+          <p className="mt-2 text-sm text-muted-foreground">
+            Revenue minus estimated farming
+            cost.
+          </p>
+
+          <p className="mt-2 text-sm font-semibold">
+            Profit margin:{" "}
+            {profitMargin.toFixed(
+              1
+            )}
+            %
+          </p>
 
         </div>
 
       </Card>
 
-      {/* -------------------------------------------------- */}
-      {/* SIMPLE EXPLANATION */}
-      {/* -------------------------------------------------- */}
+      {/* ================================================== */}
+      {/* WHAT-IF */}
+      {/* ================================================== */}
+
+      <Card className="border-primary/20 bg-primary/5 p-5 shadow-card">
+
+        <div className="flex items-center gap-3">
+
+          <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10">
+
+            <TrendingUp className="h-5 w-5 text-primary" />
+
+          </div>
+
+          <div>
+
+            <h2 className="font-display text-xl font-bold">
+              What-If: Optimized Conditions
+            </h2>
+
+            <p className="text-sm text-muted-foreground">
+              If optimized farming practices
+              improve production by approximately
+              10%.
+            </p>
+
+          </div>
+
+        </div>
+
+        <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+
+          <div className="rounded-2xl bg-background/70 p-4">
+
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Current production
+            </p>
+
+            <p className="mt-1 font-display text-xl font-extrabold">
+              {production.toFixed(
+                2
+              )} t
+            </p>
+
+          </div>
+
+          <div className="rounded-2xl bg-background/70 p-4">
+
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Optimized production
+            </p>
+
+            <p className="mt-1 font-display text-xl font-extrabold">
+              {optimizedProduction.toFixed(
+                2
+              )} t
+            </p>
+
+          </div>
+
+          <div className="rounded-2xl bg-background/70 p-4">
+
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Optimized revenue
+            </p>
+
+            <p className="mt-1 font-display text-xl font-extrabold">
+              {money(
+                optimizedRevenue
+              )}
+            </p>
+
+          </div>
+
+          <div className="rounded-2xl bg-background/70 p-4">
+
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Optimized profit
+            </p>
+
+            <p className="mt-1 font-display text-xl font-extrabold text-primary">
+              {money(
+                optimizedProfit
+              )}
+            </p>
+
+          </div>
+
+        </div>
+
+        {/* ADDITIONAL VALUE */}
+
+        <div className="mt-4 rounded-2xl bg-background/70 p-4">
+
+          <p className="text-sm">
+            Possible additional revenue:
+          </p>
+
+          <p className="mt-1 font-display text-2xl font-extrabold text-primary">
+            +{money(
+              additionalRevenue
+            )}
+          </p>
+
+          <p className="mt-2 text-sm text-muted-foreground">
+            Possible additional profit:
+            <span className="ml-1 font-semibold text-foreground">
+              +{money(
+                additionalProfit
+              )}
+            </span>
+          </p>
+
+        </div>
+
+      </Card>
+
+      {/* ================================================== */}
+      {/* FORMULA */}
+      {/* ================================================== */}
 
       <Card className="p-5 shadow-card">
 
@@ -457,35 +854,40 @@ function Revenue() {
         <div className="mt-4 rounded-2xl bg-secondary/50 p-4 text-sm leading-relaxed text-muted-foreground">
 
           <p>
-            AI predicts the expected crop yield using
-            your crop, farm area, soil, nutrient,
+            AI predicts expected crop yield using
+            the selected crop, farm area, soil,
             sensor and weather information.
           </p>
 
           <p className="mt-2">
-            The predicted production is then converted
-            into estimated sales using the selected
-            crop's market price.
+            The predicted production is then
+            converted into estimated sales using
+            the selected crop price.
           </p>
 
           <p className="mt-2 font-semibold text-foreground">
-            Revenue = Production × 10 × Price per quintal
+            Revenue = Production × 10 ×
+            Price per quintal
           </p>
 
           <p className="mt-1">
             because 1 ton = 10 quintals.
           </p>
 
+          <p className="mt-2 font-semibold text-foreground">
+            Profit = Revenue − Estimated Cost
+          </p>
+
         </div>
 
       </Card>
 
-      {/* -------------------------------------------------- */}
+      {/* ================================================== */}
       {/* DISCLAIMER */}
-      {/* -------------------------------------------------- */}
+      {/* ================================================== */}
 
       <Disclaimer
-        text="Revenue and profit figures are AI-assisted estimates based on predicted yield, crop price and estimated farm costs. Actual market prices, production and expenses may vary."
+        text="Revenue and profit figures are AI-assisted estimates based on predicted yield, selected crop price and estimated farming costs. Actual market prices, production and expenses may vary by location, season, crop and farming practices."
       />
 
     </div>

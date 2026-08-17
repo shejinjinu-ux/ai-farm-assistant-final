@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { Mic, Mail, KeyRound, ArrowRight, Sparkles } from "lucide-react";
+import { Mic, Mail, KeyRound, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -41,14 +41,17 @@ function LoginPage() {
   const [email, setEmail] = useState("");
   const [secret, setSecret] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [emailNotConfirmed, setEmailNotConfirmed] = useState(false);
 
   async function loginWithSupabase() {
-    if (!email || !secret) {
+    if (!email.trim() || !secret) {
       toast.error("Please enter your email and password");
       return;
     }
 
     setLoading(true);
+    setEmailNotConfirmed(false);
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -57,6 +60,21 @@ function LoginPage() {
       });
 
       if (error) {
+        console.error("Login error:", error);
+
+        if (
+          error.message.toLowerCase().includes("email not confirmed") ||
+          error.message.toLowerCase().includes("email_not_confirmed")
+        ) {
+          setEmailNotConfirmed(true);
+
+          toast.error(
+            "Your email is not confirmed. Please check your inbox."
+          );
+
+          return;
+        }
+
         toast.error(error.message);
         return;
       }
@@ -72,28 +90,49 @@ function LoginPage() {
 
       toast.success("Login successful 🌱");
 
-      navigate({ to: "/setup" });
+      navigate({ to: "/app" });
     } catch (error) {
-      console.error(error);
+      console.error("Login error:", error);
       toast.error("Something went wrong during login");
     } finally {
       setLoading(false);
     }
   }
 
-  function demoLogin() {
-    updateFarm({
-      farmerName: "Ramesh",
-      mobile: "98765 43210",
-    });
+  async function resendConfirmationEmail() {
+    if (!email.trim()) {
+      toast.error("Enter your email first");
+      return;
+    }
 
-    toast.success("Demo farmer logged in 🌱");
+    setResending(true);
 
-    navigate({ to: "/setup" });
+    try {
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: email.trim(),
+      });
+
+      if (error) {
+        console.error("Resend error:", error);
+        toast.error(error.message);
+        return;
+      }
+
+      toast.success(
+        "Confirmation email sent again 📧. Check your inbox."
+      );
+    } catch (error) {
+      console.error("Resend confirmation error:", error);
+      toast.error("Could not resend confirmation email");
+    } finally {
+      setResending(false);
+    }
   }
 
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
+
       {/* LEFT IMAGE */}
       <div className="relative hidden lg:block">
         <img
@@ -155,6 +194,7 @@ function LoginPage() {
               loginWithSupabase();
             }}
           >
+
             {/* EMAIL */}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -169,9 +209,12 @@ function LoginPage() {
                   autoComplete="email"
                   placeholder="farmer@example.com"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setEmailNotConfirmed(false);
+                  }}
                   className="h-13 rounded-2xl pl-10 pr-12 text-base"
-                  disabled={loading}
+                  disabled={loading || resending}
                 />
 
                 <button
@@ -181,7 +224,7 @@ function LoginPage() {
                     toast("🎙️ Voice email input can be connected later")
                   }
                   className="absolute right-2 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full gradient-leaf text-forest"
-                  disabled={loading}
+                  disabled={loading || resending}
                 >
                   <Mic className="h-4 w-4" />
                 </button>
@@ -203,7 +246,7 @@ function LoginPage() {
                   value={secret}
                   onChange={(e) => setSecret(e.target.value)}
                   className="h-13 rounded-2xl pl-10 text-base"
-                  disabled={loading}
+                  disabled={loading || resending}
                 />
               </div>
             </div>
@@ -214,59 +257,69 @@ function LoginPage() {
               {t("rememberMe")}
             </label>
 
-            {/* BUTTONS */}
-            <div className="space-y-3">
+            {/* LOGIN BUTTON */}
+            <Button
+              type="submit"
+              size="lg"
+              className="h-13 w-full rounded-2xl text-base font-bold shadow-card"
+              disabled={loading || resending}
+            >
+              {loading ? "Logging in..." : t("login")}
 
-              {/* REAL SUPABASE LOGIN */}
-              <Button
-                type="submit"
-                size="lg"
-                className="h-13 w-full rounded-2xl text-base font-bold shadow-card"
-                disabled={loading}
-              >
-                {loading ? "Logging in..." : t("login")}
+              {!loading && (
+                <ArrowRight className="h-5 w-5" />
+              )}
+            </Button>
 
-                {!loading && (
-                  <ArrowRight className="h-5 w-5" />
-                )}
-              </Button>
-
-              {/* OTP - kept for future implementation */}
-              <Button
-                type="button"
-                size="lg"
-                variant="secondary"
-                className="h-13 w-full rounded-2xl text-base font-bold"
-                onClick={() =>
-                  toast(
-                    "OTP login will be connected when SMS authentication is configured."
-                  )
-                }
-                disabled={loading}
-              >
-                {t("loginOtp")}
-              </Button>
-
-              {/* DEMO LOGIN */}
-              <Button
-                type="button"
-                size="lg"
-                variant="outline"
-                className="h-13 w-full rounded-2xl text-base font-bold"
-                onClick={demoLogin}
-                disabled={loading}
-              >
-                <Sparkles className="h-5 w-5" />
-                {t("demoLogin")}
-              </Button>
-            </div>
           </form>
 
+          {/* EMAIL NOT CONFIRMED */}
+          {emailNotConfirmed && (
+            <div className="mt-5 rounded-2xl border border-yellow-300 bg-yellow-50 p-4">
+
+              <p className="text-sm font-semibold text-yellow-900">
+                📧 Email not confirmed
+              </p>
+
+              <p className="mt-1 text-xs text-yellow-800">
+                Please check your email inbox and click the confirmation link
+                before logging in.
+              </p>
+
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-3 h-10 w-full rounded-xl font-semibold"
+                onClick={resendConfirmationEmail}
+                disabled={resending}
+              >
+                {resending
+                  ? "Sending..."
+                  : "Resend confirmation email"}
+              </Button>
+
+            </div>
+          )}
+
+          {/* SIGN UP */}
+          <div className="mt-6 text-center">
+            <p className="text-sm text-muted-foreground">
+              New farmer?{" "}
+              <Link
+                to="/signup"
+                className="font-bold text-primary hover:underline"
+              >
+                Create an account
+              </Link>
+            </p>
+          </div>
+
           {/* INFO */}
-          <p className="mt-6 text-center text-xs text-muted-foreground">
+          <p className="mt-5 text-center text-xs text-muted-foreground">
             Use your registered email and password to access your farm
-            dashboard. Demo login is available for testing.
+            dashboard.
           </p>
+
         </div>
       </div>
     </div>
