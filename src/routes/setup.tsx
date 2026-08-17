@@ -99,7 +99,7 @@ export const Route = createFileRoute("/setup")({
 ========================================================= */
 
 const BACKEND_URL =
-  "http://127.0.0.1:8000";
+  "https://ai-farm-backend-v57r.onrender.com";
 
 
 /* =========================================================
