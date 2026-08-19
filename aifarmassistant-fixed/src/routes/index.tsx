@@ -78,7 +78,7 @@ function Landing() {
             <h1 className="mt-5 font-display text-4xl font-extrabold leading-[1.05] sm:text-5xl lg:text-6xl">
               AI FARM
               <br />
-              <span className="text-gradient-leaf">ASSISTANT</span>
+              <span className="text-gradient-leaf"> AI ASSISTANT</span>
             </h1>
             <p className="mt-4 font-display text-lg font-bold text-secondary-foreground sm:text-xl">
               Smarter Farming. Better Decisions. Higher Yield.
