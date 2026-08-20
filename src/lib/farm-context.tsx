@@ -34,7 +34,6 @@ export interface FarmProfile {
   district: string;
   village: string;
 
-  /* GPS LOCATION */
   latitude?: number | null;
   longitude?: number | null;
 
@@ -96,6 +95,14 @@ interface FarmContextValue {
   farm: FarmProfile;
 
   updateFarm: (patch: Partial<FarmProfile>) => void;
+
+  /*
+   * IMPORTANT:
+   * farmLoading = Supabase/local farm data still loading
+   * farmReady   = farm data is ready for other pages
+   */
+  farmLoading: boolean;
+  farmReady: boolean;
 
   sensors: SensorReading[];
 
@@ -175,6 +182,19 @@ export function FarmProvider({
   const [farm, setFarm] =
     useState<FarmProfile>(defaultFarm);
 
+  /*
+   * IMPORTANT FIX
+   *
+   * Initially true loading state.
+   * This prevents Recommendations from calling
+   * the backend before saved farm data is loaded.
+   */
+  const [farmLoading, setFarmLoading] =
+    useState(true);
+
+  const [farmReady, setFarmReady] =
+    useState(false);
+
   const [sensors, setSensors] =
     useState<SensorReading[]>(baseSensors);
 
@@ -201,79 +221,97 @@ export function FarmProvider({
     useState(false);
 
   /* =======================================================
-     1. LOAD LOCAL DATA
+     1. LOAD SAVED FARM + SUPABASE FARM
   ======================================================= */
 
   useEffect(() => {
-    try {
-      const raw =
-        localStorage.getItem(STORAGE_KEY);
+    let cancelled = false;
 
-      if (!raw) return;
-
-      const parsed = JSON.parse(raw);
-
-      if (parsed.farm) {
-        setFarm({
-          ...defaultFarm,
-          ...parsed.farm,
-        });
-      }
-
-      if (parsed.language) {
-        setLanguage(parsed.language);
-      }
-
-      if (
-        typeof parsed.demoMode === "boolean"
-      ) {
-        setDemoMode(parsed.demoMode);
-      }
-    } catch (error) {
-      console.error(
-        "Local storage load error:",
-        error,
-      );
-    }
-  }, []);
-
-  /* =======================================================
-     2. SAVE LOCAL DATA
-  ======================================================= */
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({
-          farm,
-          language,
-          demoMode,
-        }),
-      );
-    } catch (error) {
-      console.error(
-        "Local storage save error:",
-        error,
-      );
-    }
-  }, [farm, language, demoMode]);
-
-  /* =======================================================
-     3. LOAD FARM FROM SUPABASE
-  ======================================================= */
-
-  useEffect(() => {
-    async function loadFarms() {
+    async function loadFarm() {
       try {
+        /*
+         * ---------------------------------------------------
+         * STEP 1
+         * Load localStorage first.
+         * ---------------------------------------------------
+         */
+
+        let localFarm: FarmProfile | null = null;
+
+        try {
+          const raw =
+            localStorage.getItem(
+              STORAGE_KEY,
+            );
+
+          if (raw) {
+            const parsed =
+              JSON.parse(raw);
+
+            if (parsed.farm) {
+              localFarm = {
+                ...defaultFarm,
+                ...parsed.farm,
+              };
+
+              if (!cancelled) {
+                setFarm(localFarm);
+              }
+            }
+
+            if (
+              parsed.language &&
+              !cancelled
+            ) {
+              setLanguage(
+                parsed.language,
+              );
+            }
+
+            if (
+              typeof parsed.demoMode ===
+                "boolean" &&
+              !cancelled
+            ) {
+              setDemoMode(
+                parsed.demoMode,
+              );
+            }
+          }
+        } catch (error) {
+          console.error(
+            "Local storage load error:",
+            error,
+          );
+        }
+
+        /*
+         * ---------------------------------------------------
+         * STEP 2
+         * Load saved farm from Supabase.
+         * ---------------------------------------------------
+         */
+
         const {
           data: { user },
         } = await supabase.auth.getUser();
 
         if (!user) {
           console.log(
-            "No logged-in user",
+            "No logged-in user.",
           );
+
+          /*
+           * If local farm exists, use it.
+           * Otherwise keep default farm.
+           */
+          if (!cancelled) {
+            setFarm((current) => ({
+              ...current,
+              ...(localFarm ?? {}),
+            }));
+          }
+
           return;
         }
 
@@ -293,6 +331,18 @@ export function FarmProvider({
             "Farm fetch error:",
             error,
           );
+
+          /*
+           * Supabase failed.
+           * Local farm can still be used.
+           */
+          if (!cancelled) {
+            setFarm((current) => ({
+              ...current,
+              ...(localFarm ?? {}),
+            }));
+          }
+
           return;
         }
 
@@ -300,6 +350,13 @@ export function FarmProvider({
           "Farms from Supabase:",
           data,
         );
+
+        /*
+         * ---------------------------------------------------
+         * STEP 3
+         * Select most recent saved farm.
+         * ---------------------------------------------------
+         */
 
         if (
           data &&
@@ -318,89 +375,173 @@ export function FarmProvider({
             firstFarm.longitude,
           );
 
-          setFarm((current) => ({
-            ...current,
+          if (!cancelled) {
+            setFarm((current) => ({
+              ...current,
 
-            id: firstFarm.id,
+              id:
+                firstFarm.id,
 
-            farmerName:
-              firstFarm.farmer_name ??
-              current.farmerName,
+              farmerName:
+                firstFarm.farmer_name ??
+                current.farmerName,
 
-            mobile:
-              firstFarm.phone ??
-              current.mobile,
+              mobile:
+                firstFarm.phone ??
+                current.mobile,
 
-            farmName:
-              firstFarm.farm_name ??
-              current.farmName,
+              farmName:
+                firstFarm.farm_name ??
+                current.farmName,
 
-            state:
-              firstFarm.state ??
-              current.state,
+              state:
+                firstFarm.state ??
+                current.state,
 
-            district:
-              firstFarm.district ??
-              current.district,
+              district:
+                firstFarm.district ??
+                current.district,
 
-            village:
-              firstFarm.village ??
-              current.village,
+              village:
+                firstFarm.village ??
+                current.village,
 
-            /* ==========================
-               GPS
-            ========================== */
+              /*
+               * ==========================
+               * SAVED FARM GPS
+               * ==========================
+               */
 
-            latitude:
-              firstFarm.latitude !== null &&
-              firstFarm.latitude !== undefined
-                ? Number(
-                    firstFarm.latitude,
-                  )
-                : current.latitude,
+              latitude:
+                firstFarm.latitude !==
+                  null &&
+                firstFarm.latitude !==
+                  undefined
+                  ? Number(
+                      firstFarm.latitude,
+                    )
+                  : current.latitude,
 
-            longitude:
-              firstFarm.longitude !== null &&
-              firstFarm.longitude !== undefined
-                ? Number(
-                    firstFarm.longitude,
-                  )
-                : current.longitude,
+              longitude:
+                firstFarm.longitude !==
+                  null &&
+                firstFarm.longitude !==
+                  undefined
+                  ? Number(
+                      firstFarm.longitude,
+                    )
+                  : current.longitude,
 
-            area:
-              firstFarm.area ??
-              current.area,
+              area:
+                firstFarm.area ??
+                current.area,
 
-            unit:
-              firstFarm.area_unit ??
-              current.unit,
+              unit:
+                firstFarm.area_unit ??
+                current.unit,
 
-            cropId:
-              firstFarm.crop_id ??
-              current.cropId,
+              cropId:
+                firstFarm.crop_id ??
+                current.cropId,
 
-            soilId:
-              firstFarm.soil_id ??
-              current.soilId,
+              soilId:
+                firstFarm.soil_id ??
+                current.soilId,
 
-            setupComplete:
-              firstFarm.setup_complete ??
-              true,
-          }));
+              setupComplete:
+                firstFarm.setup_complete ??
+                true,
+            }));
+          }
+        } else {
+          console.log(
+            "No farms found in Supabase.",
+          );
+
+          /*
+           * No Supabase farm.
+           * Keep local saved farm if available.
+           */
+          if (!cancelled) {
+            setFarm((current) => ({
+              ...current,
+              ...(localFarm ?? {}),
+            }));
+          }
         }
       } catch (error) {
         console.error(
           "Unexpected farm loading error:",
           error,
         );
+      } finally {
+        /*
+         * ---------------------------------------------------
+         * VERY IMPORTANT
+         *
+         * Only after the farm loading process is finished:
+         *
+         * farmLoading = false
+         * farmReady   = true
+         *
+         * Recommendations can now safely use farm data.
+         * ---------------------------------------------------
+         */
+
+        if (!cancelled) {
+          setFarmLoading(false);
+          setFarmReady(true);
+        }
       }
     }
 
-    loadFarms();
+    loadFarm();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   /* =======================================================
-     4. LOAD CURRENT SENSOR DATA
+     2. SAVE FARM TO LOCAL STORAGE
+  ======================================================= */
+
+  useEffect(() => {
+    /*
+     * Don't save the initial default farm while
+     * Supabase/localStorage is still loading.
+     *
+     * This prevents the initial empty/default farm
+     * from overwriting a saved farm.
+     */
+    if (!farmReady) {
+      return;
+    }
+
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          farm,
+          language,
+          demoMode,
+        }),
+      );
+    } catch (error) {
+      console.error(
+        "Local storage save error:",
+        error,
+      );
+    }
+  }, [
+    farm,
+    language,
+    demoMode,
+    farmReady,
+  ]);
+
+  /* =======================================================
+     3. LOAD CURRENT SENSOR DATA
   ======================================================= */
 
   useEffect(() => {
@@ -512,7 +653,7 @@ export function FarmProvider({
   }, [farm.id]);
 
   /* =======================================================
-     5. SAVE CURRENT SENSOR DATA
+     4. SAVE CURRENT SENSOR DATA
   ======================================================= */
 
   const saveCurrentSensors =
@@ -623,7 +764,7 @@ export function FarmProvider({
     );
 
   /* =======================================================
-     6. SAVE SENSOR HISTORY
+     5. SAVE SENSOR HISTORY
   ======================================================= */
 
   const saveSensorHistory =
@@ -699,7 +840,7 @@ export function FarmProvider({
     );
 
   /* =======================================================
-     7. DEMO SENSOR SIMULATION
+     6. DEMO SENSOR SIMULATION
   ======================================================= */
 
   const simulate =
@@ -744,7 +885,7 @@ export function FarmProvider({
     ]);
 
   /* =======================================================
-     8. UPDATE FARM
+     7. UPDATE FARM
   ======================================================= */
 
   const updateFarm =
@@ -761,24 +902,7 @@ export function FarmProvider({
     );
 
   /* =======================================================
-     9. AI YIELD PREDICTION
-     
-     14 MODEL INPUTS:
-
-     State
-     District
-     Crop
-     Area
-     N
-     P
-     K
-     Temperature
-     Humidity
-     pH
-     Rainfall
-     Wind Speed
-     Solar Radiation
-     Soil Type
+     8. AI YIELD PREDICTION
   ======================================================= */
 
   const predictYield =
@@ -830,26 +954,32 @@ export function FarmProvider({
             );
 
           const payload = {
-            state: farm.state,
+            state:
+              farm.state,
 
             district:
               farm.district,
 
-            crop: crop.name,
+            crop:
+              crop.name,
 
-            area: areaHa,
+            area:
+              areaHa,
 
-            N: getSensorValue(
-              "nitrogen",
-            ),
+            N:
+              getSensorValue(
+                "nitrogen",
+              ),
 
-            P: getSensorValue(
-              "phosphorus",
-            ),
+            P:
+              getSensorValue(
+                "phosphorus",
+              ),
 
-            K: getSensorValue(
-              "potassium",
-            ),
+            K:
+              getSensorValue(
+                "potassium",
+              ),
 
             temperature:
               Number(
@@ -861,9 +991,10 @@ export function FarmProvider({
                 weather.humidity,
               ),
 
-            ph: getSensorValue(
-              "ph",
-            ),
+            ph:
+              getSensorValue(
+                "ph",
+              ),
 
             rainfall:
               Number(
@@ -880,7 +1011,8 @@ export function FarmProvider({
                 weather.solar_radiation,
               ),
 
-            soil_type: soil.name,
+            soil_type:
+              soil.name,
           };
 
           console.log(
@@ -994,7 +1126,7 @@ export function FarmProvider({
     );
 
   /* =======================================================
-     10. CONTEXT VALUE
+     9. CONTEXT VALUE
   ======================================================= */
 
   const value =
@@ -1024,6 +1156,13 @@ export function FarmProvider({
         farm,
 
         updateFarm,
+
+        /*
+         * IMPORTANT
+         */
+        farmLoading,
+
+        farmReady,
 
         sensors,
 
@@ -1104,6 +1243,8 @@ export function FarmProvider({
     }, [
       farm,
       updateFarm,
+      farmLoading,
+      farmReady,
       sensors,
       simulate,
       lastReading,
